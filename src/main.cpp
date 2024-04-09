@@ -36,6 +36,14 @@ struct pos_t
 {
     uint32_t i;
     uint32_t j;
+    pos_t(int i_,int j_){
+        this->i=i_;
+        this->j=j_;
+    }
+    pos_t(){
+        this->i=0;
+        this->j=0;
+    }
 };
 
 struct entity_t
@@ -98,6 +106,16 @@ int main()
         
         // Create the entities
         // <YOUR CODE HERE>
+        std::random_device rd;
+        std::mt19937 posicao_aleatoria(rd()); 
+        std::uniform_int_distribution<> distrib(0,15);
+        for(int i=0;i<(uint32_t)request_body["plants"];i++){
+            pos_t posicao;
+            if(entity_grid[distrib(posicao_aleatoria)][distrib(posicao_aleatoria)].type==empty){
+                
+            }
+        }
+        
 
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
