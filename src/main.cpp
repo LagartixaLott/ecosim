@@ -110,12 +110,44 @@ int main()
         std::mt19937 posicao_aleatoria(rd()); 
         std::uniform_int_distribution<> distrib(0,15);
         for(int i=0;i<(uint32_t)request_body["plants"];i++){
-            pos_t posicao;
-            if(entity_grid[distrib(posicao_aleatoria)][distrib(posicao_aleatoria)].type==empty){
-                
+            pos_t posicao(distrib(posicao_aleatoria),distrib(posicao_aleatoria));
+            if(entity_grid[posicao.i][posicao.j].type==empty){
+                entity_t planta;
+                planta.age=0;
+                planta.energy=100;
+                planta.type=plant;
+                entity_grid[posicao.i][posicao.j]=planta;
+            }
+            else{
+                i--;
             }
         }
-        
+         for(int i=0;i<(uint32_t)request_body["herbivores"];i++){
+            pos_t posicao(distrib(posicao_aleatoria),distrib(posicao_aleatoria));
+            if(entity_grid[posicao.i][posicao.j].type==empty){
+                entity_t herbivoro;
+                herbivoro.age=0;
+                herbivoro.energy=100;
+                herbivoro.type=herbivore;
+                entity_grid[posicao.i][posicao.j]=herbivoro;
+            }
+            else{
+                i--;
+            }
+        }
+         for(int i=0;i<(uint32_t)request_body["carnivores"];i++){
+            pos_t posicao(distrib(posicao_aleatoria),distrib(posicao_aleatoria));
+            if(entity_grid[posicao.i][posicao.j].type==empty){
+                entity_t carnivoro;
+                carnivoro.age=0;
+                carnivoro.energy=100;
+                carnivoro.type=carnivore;
+                entity_grid[posicao.i][posicao.j]=carnivoro;
+            }
+            else{
+                i--;
+            }
+        }
 
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
