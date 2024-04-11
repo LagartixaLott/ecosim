@@ -4,6 +4,9 @@
 #include "crow_all.h"
 #include "json.hpp"
 #include <random>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 static const uint32_t NUM_ROWS = 15;
 
@@ -72,6 +75,28 @@ namespace nlohmann
 
 // Grid that contains the entities
 static std::vector<std::vector<entity_t>> entity_grid;
+
+bool iteracao(int i,int j,std::mutex morte){
+    entity_t entidade = entity_grid[i][j];
+    //tratar primeiro as mortes, alimentações e reproduções
+    //por último se ele vai andar
+    //deve haver um lock no inicio 
+    //deve haver um wait() caso a ação seja de reprodução ou andar
+    if(entidade.type=plant){
+
+    }
+    if(entidade.type=herbivore){
+
+    }
+    if(entidade.type=carnivore){
+
+    }
+}
+
+std::mutex mutex_morte;
+std::mutex mutex_come;
+std::mutex mutex_reproduz;
+std::mutex mutex_anda;
 
 int main()
 {
@@ -148,7 +173,6 @@ int main()
                 i--;
             }
         }
-
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
         res.body = json_grid.dump();
@@ -160,9 +184,14 @@ int main()
                                {
         // Simulate the next iteration
         // Iterate over the entity grid and simulate the behaviour of each entity
-        
         // <YOUR CODE HERE>
-        
+         for(int i=0;i<15;i++){
+            for(int j=0;j<15;j++){
+                if(entity_grid[i][j].type!=empty){
+                    std::thread t(iteracao,i,j);
+                }
+            }
+        }
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
         return json_grid.dump(); });
