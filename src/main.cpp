@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <barrier>
 
 static const uint32_t NUM_ROWS = 15;
 
@@ -91,15 +92,15 @@ bool iteracao(int i,int j,std::mutex morte){
     if(entidade.type=carnivore){
 
     }
+    sinc_final.wait();
 }
-
+int paralelo;
+std::barrier sinc_final(paralelo);
 std::mutex mutex_morte;
 std::mutex mutex_come;
 std::mutex mutex_reproduz;
 std::mutex mutex_anda;
-
-int main()
-{
+int main(){
     crow::SimpleApp app;
 
     // Endpoint to serve the HTML page
@@ -185,13 +186,28 @@ int main()
         // Simulate the next iteration
         // Iterate over the entity grid and simulate the behaviour of each entity
         // <YOUR CODE HERE>
+        int n_thread=0;
          for(int i=0;i<15;i++){
             for(int j=0;j<15;j++){
                 if(entity_grid[i][j].type!=empty){
+                    n_thread++;
                     std::thread t(iteracao,i,j);
                 }
             }
         }
+class barrier{
+    public:
+        barrier(int c);
+        void wait();
+    private:
+        std::mutex m;
+        std::condition_variable cv;
+        int desired_count;
+        int current_count;
+};
+       paralelo=n_thread;
+       sinc_final;
+
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
         return json_grid.dump(); });
