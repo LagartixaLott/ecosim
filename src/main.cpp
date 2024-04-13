@@ -215,5 +215,3 @@ class barrier{
 
     return 0;
 }
-
-// mudei qualquer coisa

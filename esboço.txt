@@ -1,0 +1,68 @@
+var global num_iteração
+
+//// preferencia carnivoro, herbivoro, planta.
+
+inicio thread
+
+bool alive = true;
+
+//quantidade++;
+num_c ++;
+
+while(alive) ini 
+
+wait(); //espera ser liberado
+
+//após ser liberado:
+
+
+checar se morrer de idade()
+
+//ação:{ 
+
+
+se herb
+	confere vizinhanca(carnivoro) //confere se existe algum predador adjacente e diagonal
+	barrier wait carnivoro
+se planta
+	confere vizinhanca(herbivoro) //confere se existe algum predador adjacente e diagonal
+	barrier wait herbivoro
+checar se foi morto() // tipo do local diferente do seu próprio tipo. alive = false?
+
+realizar a ação (dependendo da probabilidade)
+	m.lock();
+	comer()
+		confere se existe animal()
+		confere se idade > 0  ou (idade=0 e num_iteração=0)
+	reproduzir()
+	m.unlock();
+} fim ação
+
+morrer de energia()
+
+
+while alvie: end
+
+
+//finalização:
+
+
+
+num_c --; //decrementa a var global do seu tipo.
+atualiza_numero(1)
+
+join(); //? n precisa
+
+
+//encerra thread
+
+
+
+main()
+
+
+get{
+	barrier wait carnivoro	
+	barrier wait herbivoro
+	barrier wait plantas
+}
