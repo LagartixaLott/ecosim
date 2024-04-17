@@ -3,6 +3,9 @@
 
 #include "crow_all.h"
 #include "json.hpp"
+#include <iostream>
+#include <string>
+#include <syncstream>
 #include <random>
 #include <thread>
 #include <mutex>
