@@ -3,15 +3,13 @@
 
 #include "crow_all.h"
 #include "json.hpp"
-#include <iostream>
-#include <string>
-#include <syncstream>
 #include <random>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
 #include <barrier>
 
+int n_execucao=0;
 static const uint32_t NUM_ROWS = 15;
 
 // Constants
@@ -30,6 +28,9 @@ const double HERBIVORE_EAT_PROBABILITY = 0.9;
 const double CARNIVORE_MOVE_PROBABILITY = 0.5;
 const double CARNIVORE_EAT_PROBABILITY = 1.0;
 
+bool alive(entity_t bicho){
+
+}
 // Type definitions
 enum entity_type_t
 {
@@ -58,6 +59,7 @@ struct entity_t
     entity_type_t type;
     int32_t energy;
     int32_t age;
+    pos_t posicao;
 };
 
 // Auxiliary code to convert the entity_type_t enum to a string
@@ -79,13 +81,15 @@ namespace nlohmann
 
 // Grid that contains the entities
 static std::vector<std::vector<entity_t>> entity_grid;
-
-bool iteracao(int i,int j,std::mutex morte){
-    entity_t entidade = entity_grid[i][j];
+bool iteracao(entity_t entidade){
+    
     //tratar primeiro as mortes, alimentações e reproduções
     //por último se ele vai andar
     //deve haver um lock no inicio 
     //deve haver um wait() caso a ação seja de reprodução ou andar
+    while(alive(entidade)){
+    cd.wait(execucao_);
+    execucao_.lock();
     if(entidade.type=plant){
 
     }
@@ -95,14 +99,24 @@ bool iteracao(int i,int j,std::mutex morte){
     if(entidade.type=carnivore){
 
     }
-    sinc_final.wait();
+
+    execucao_.unlock();
+    (*ponteiro_barreira).arrive_and_wait();
+    }
+    (*ponteiro_barreira).arrive();
+    n_threads--;
 }
+
 int paralelo;
-std::barrier sinc_final(paralelo);
+auto ponteiro_barreira = new std::barrier(1);
 std::mutex mutex_morte;
 std::mutex mutex_come;
 std::mutex mutex_reproduz;
 std::mutex mutex_anda;
+std::mutex execucao;
+std::unique_lock execucao_(execucao);
+std::condition_variable cd;
+int n_threads=0;
 int main(){
     crow::SimpleApp app;
 
@@ -145,7 +159,12 @@ int main(){
                 planta.age=0;
                 planta.energy=100;
                 planta.type=plant;
+                planta.posicao= posicao;
                 entity_grid[posicao.i][posicao.j]=planta;
+                std::thread t(iteracao,planta);
+                n_threads++;
+                 t.detach();
+                
             }
             else{
                 i--;
@@ -158,7 +177,12 @@ int main(){
                 herbivoro.age=0;
                 herbivoro.energy=100;
                 herbivoro.type=herbivore;
+                herbivoro.posicao=posicao;
                 entity_grid[posicao.i][posicao.j]=herbivoro;
+                std::thread t(iteracao,herbivoro);
+                t.detach();
+                n_threads++;
+               
             }
             else{
                 i--;
@@ -171,7 +195,11 @@ int main(){
                 carnivoro.age=0;
                 carnivoro.energy=100;
                 carnivoro.type=carnivore;
+                carnivoro.posicao=posicao;
                 entity_grid[posicao.i][posicao.j]=carnivoro;
+                std::thread t(iteracao,carnivoro);
+                n_threads++;
+                 t.detach();
             }
             else{
                 i--;
@@ -189,27 +217,12 @@ int main(){
         // Simulate the next iteration
         // Iterate over the entity grid and simulate the behaviour of each entity
         // <YOUR CODE HERE>
-        int n_thread=0;
-         for(int i=0;i<15;i++){
-            for(int j=0;j<15;j++){
-                if(entity_grid[i][j].type!=empty){
-                    n_thread++;
-                    std::thread t(iteracao,i,j);
-                }
-            }
-        }
-class barrier{
-    public:
-        barrier(int c);
-        void wait();
-    private:
-        std::mutex m;
-        std::condition_variable cv;
-        int desired_count;
-        int current_count;
-};
-       paralelo=n_thread;
-       sinc_final;
+        int num_threads_aux= n_threads;
+        std::barrier barreira_fim(num_threads_aux);
+        ponteiro_barreira=&barreira_fim;
+        cd.notify_all();
+      
+       (*ponteiro_barreira).arrive_and_wait();
 
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
