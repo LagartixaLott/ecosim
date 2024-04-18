@@ -8,7 +8,16 @@
 #include <mutex>
 #include <condition_variable>
 #include <barrier>
-
+int paralelo;
+auto ponteiro_barreira = new std::barrier(1);
+std::mutex mutex_morte;
+std::mutex mutex_come;
+std::mutex mutex_reproduz;
+std::mutex mutex_anda;
+std::mutex execucao;
+std::unique_lock execucao_(execucao);
+std::condition_variable cd;
+int n_threads=0;
 int n_execucao=0;
 static const uint32_t NUM_ROWS = 15;
 
@@ -28,9 +37,7 @@ const double HERBIVORE_EAT_PROBABILITY = 0.9;
 const double CARNIVORE_MOVE_PROBABILITY = 0.5;
 const double CARNIVORE_EAT_PROBABILITY = 1.0;
 
-bool alive(entity_t bicho){
 
-}
 // Type definitions
 enum entity_type_t
 {
@@ -81,7 +88,10 @@ namespace nlohmann
 
 // Grid that contains the entities
 static std::vector<std::vector<entity_t>> entity_grid;
-bool iteracao(entity_t entidade){
+bool alive(entity_t bicho){
+return false;
+}
+void iteracao(entity_t entidade){
     
     //tratar primeiro as mortes, alimentações e reproduções
     //por último se ele vai andar
@@ -107,16 +117,7 @@ bool iteracao(entity_t entidade){
     n_threads--;
 }
 
-int paralelo;
-auto ponteiro_barreira = new std::barrier(1);
-std::mutex mutex_morte;
-std::mutex mutex_come;
-std::mutex mutex_reproduz;
-std::mutex mutex_anda;
-std::mutex execucao;
-std::unique_lock execucao_(execucao);
-std::condition_variable cd;
-int n_threads=0;
+
 int main(){
     crow::SimpleApp app;
 
@@ -149,9 +150,10 @@ int main(){
         
         // Create the entities
         // <YOUR CODE HERE>
+        
         std::random_device rd;
         std::mt19937 posicao_aleatoria(rd()); 
-        std::uniform_int_distribution<> distrib(0,15);
+        std::uniform_int_distribution<> distrib(0,14);
         for(int i=0;i<(uint32_t)request_body["plants"];i++){
             pos_t posicao(distrib(posicao_aleatoria),distrib(posicao_aleatoria));
             if(entity_grid[posicao.i][posicao.j].type==empty){
