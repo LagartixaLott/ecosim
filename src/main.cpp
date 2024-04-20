@@ -113,7 +113,7 @@ void iteracao(pos_t pos){
 
     bool isAlive = true;
     bool isDying = false;
-    pos_t pos_aux= pos;
+    pos_t pos_cur= pos;
     while(isAlive){
 
         // Cria um objeto do tipo unique_lock que no construtor chama m.lock()
@@ -121,7 +121,7 @@ void iteracao(pos_t pos){
 
         new_iteration.wait(ni_lk);
 
-        entity = &entity_grid[pos_aux.i][pos_aux.j];
+        entity = &entity_grid[pos_cur.i][pos_cur.j];
         entity -> age = entity-> age + 1;
 
         isDying = !check_age(entity) || entity -> energy <= 0; //morrer de idade ou energia
