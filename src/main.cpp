@@ -7,8 +7,9 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <stack>
 //#include <barrier>
-
+std::vector<pos_t> dead;
 int n_threads = 0;
 int n_ready_threads = 0;
 std::mutex m;
@@ -62,9 +63,63 @@ struct pos_t
     uint32_t i;
     uint32_t j;
 };
+struct close_pos{
+    std::stack<pos_t>  plants;
+    std::stack<pos_t>  herbivores;
+    std::stack<pos_t>  carnivores;
+    std::stack<pos_t>  empties;
 
-struct entity_t
-{
+    close_pos(pos_t pos);
+};
+
+void empty_stack(std::stack<pos_t> pilha){
+    while (!pilha.empty()) {
+        pilha.pop();
+    }
+}
+
+close_pos::close_pos(pos_t pos){
+   int i=pos.i;
+   int j=pos.j;
+   empty_stack(this->carnivores);
+   empty_stack(this->herbivores);
+   empty_stack(this->plants);
+   empty_stack(this->empties);
+   if(i<14){
+    switch (entity_grid[i+1][j].type){
+        case plant: plants.push(pos_t(i+1,j));
+        case herbivore: plants.push(pos_t(i+1,j));
+        case carnivore: plants.push(pos_t(i+1,j));
+        case empty: plants.push(pos_t(i+1,j));
+    }
+   }
+   if(j<14){
+    switch (entity_grid[i][j+1].type){
+        case plant: plants.push(pos_t(i,j+1));
+        case herbivore: plants.push(pos_t(i,j+1));
+        case carnivore: plants.push(pos_t(i,j+1));
+        case empty: plants.push(pos_t(i,j+1));
+    }
+   }
+   if(i>0){
+    switch (entity_grid[i-1][j].type){
+        case plant: plants.push(pos_t(i-1,j));
+        case herbivore: plants.push(pos_t(i-1,j));
+        case carnivore: plants.push(pos_t(i-1,j));
+        case empty: plants.push(pos_t(i-1,j));
+    }
+   }
+   if(j>0){
+    switch (entity_grid[i][j-1].type){
+        case plant: plants.push(pos_t(i,j-1));
+        case herbivore: plants.push(pos_t(i,j-1));
+        case carnivore: plants.push(pos_t(i,j-1));
+        case empty: plants.push(pos_t(i,j-1));
+    }
+   }
+}
+struct entity_t{
+
     entity_type_t type;
     int32_t energy;
     int32_t age;
@@ -73,7 +128,9 @@ struct entity_t
     int32_t prob_rep();
     int32_t prob_eat();
     int32_t prob_mov();
-
+    bool eat(close_pos *clos_pos);
+    bool reproduct(close_pos *clos_pos);
+    void move(close_pos *clos_pos);
     //ainda vou criar o vetor de adjacentes
 };
 
@@ -159,6 +216,17 @@ void kill_entity(entity_t* entity){
     entity -> energy = 0;
 }
 
+bool eat(close_pos *clos_pos){
+    return false;
+}
+
+bool reproduct(close_pos *clos_pos){
+    return false;
+}
+
+void move(close_pos *clos_pos){
+    
+}
 
 void iteracao(pos_t pos, entity_type_t type){
     //Lembrar de,na reprodução, atualizar também a variável de tipos 
@@ -166,11 +234,10 @@ void iteracao(pos_t pos, entity_type_t type){
     //por último se ele vai andar
     //deve haver um lock no inicio 
     //deve haver um wait() caso a ação seja de reprodução ou andar
-    entity_t* entity;
-
+    pos_t pos_cur=pos;
     bool isAlive = true;
     bool isDying = false;
-    pos_t pos_cur= pos;
+    entity_t* entity=&entity_grid[pos.i][pos.j];
     while(isAlive){
 
         // Cria um objeto do tipo unique_lock que no construtor chama m.lock()
@@ -192,15 +259,11 @@ void iteracao(pos_t pos, entity_type_t type){
         entity = &entity_grid[pos_cur.i][pos_cur.j];
         entity -> age = entity-> age + 1;
 
-       if(!check_age(entity) || entity -> energy <= 0){ //morrer de idade ou energia, precisa "se m4tar"
-            kill_entity(entity);
+       for(int k=0;k<dead.size();k++){ //Ver se morreu
+          if(pos_cur==dead[k]){
             isDying = true;
-        }
-
-        if(entity->type == empty) { // caso tenha sido morto/excluído por algum predador
-            isDying = true;
-        }
-
+          }
+       }
        if(!isDying) {//se vivo
             /*checar a vizinhança. Vale a pena criar uma função que retorna um vetor de posições possíveis, 
             já que pode ser usado nas funções/linhas seguintes.
@@ -213,6 +276,12 @@ void iteracao(pos_t pos, entity_type_t type){
                     limpa a atual, e atualiza a posiçao pos da thread. é uma boa fazer uma função específica para mover a uma posição determinada.). 
                     decrementa energia.
             */
+        auto clos_pos = new close_pos(pos_cur);
+        if(!entity->eat(clos_pos)){
+            if(!entity->reproduct(clos_pos)){
+                entity->move(clos_pos);
+            }
+        }
             
         }
 
@@ -308,7 +377,15 @@ int main()
         int num_c_threads_aux  = num_c;
         int num_h_threads_aux  = num_h;
         int num_p_threads_aux  = num_p;
-
+        dead.clear();
+        for(int i_=0;i_<15;i_++){
+            for(int j_=0;j_<15;j_++){
+                if(entity_grid[i_][j_].age==entity_grid[i_][j_].max_age() || entity_grid[i_][j_].energy<=0){
+                   kill_entity(&entity_grid[i_][j_]);
+                   dead.emplace_back(pos_t(i_,j_));
+                }
+            }
+        }
         iteration_c.notify_all();
         n_ready_threads = 0;
         while(n_ready_threads < num_c_threads_aux) {
