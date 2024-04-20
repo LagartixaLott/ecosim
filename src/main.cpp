@@ -12,12 +12,24 @@
 int n_threads = 0;
 int n_ready_threads = 0;
 std::mutex m;
+//Número de plantas
+int num_p;
+//Número de herbívoros
+int num_h;
+//Número de carnívoros
+int num_c;
 //std::mutex take_action;
 std::condition_variable new_iteration;
 std::condition_variable thread_finished;
+//iteração planta
+std::condition_variable iteration_p;
+//iteração herbívoro
+std::condition_variable iteration_h;
+//iteração carnívoro
+std::condition_variable iteration_c;
+
 //std::mutex ni_m;
 //std::mutex tf_m;
-
 static const uint32_t NUM_ROWS = 15;
 
 // Constants
@@ -84,6 +96,7 @@ int random_position(int max_) {
 static std::vector<std::vector<entity_t>> entity_grid;
 
 
+
 bool check_age(entity_t* entity){
     uint32_t max_age = 0;
     switch (entity -> type){
@@ -94,17 +107,23 @@ bool check_age(entity_t* entity){
     if(entity -> age > max_age) then: return false;
     return true;
 }
-
+void modify_num_type(entity_type_t type, int value){
+    switch (type){
+        case plant: num_p += value; break;
+        case herbivore: num_h += value; break;
+        case carnivore: num_c += value; break;
+    }
+}
 void kill_entity(entity_t* entity){
+    modify_num_type(entity->type,-1);
     entity -> type = empty;
     entity -> age = 0;
     entity -> energy = 0;
-    n_threads--;
 }
 
 
-void iteracao(pos_t pos){
-    
+void iteracao(pos_t pos, entity_type_t type){
+    //Lembrar de,na reprodução, atualizar também a variável de tipos 
     //tratar primeiro as mortes, alimentações e reproduções
     //por último se ele vai andar
     //deve haver um lock no inicio 
@@ -119,17 +138,32 @@ void iteracao(pos_t pos){
         // Cria um objeto do tipo unique_lock que no construtor chama m.lock()
 		std::unique_lock<std::mutex> ni_lk(m);
 
-        new_iteration.wait(ni_lk);
+        //new_iteration.wait(ni_lk);
+        switch(type){
+        case plant:
+        iteration_p.wait(ni_lk);
+        break;
+        case herbivore:
+        iteration_h.wait(ni_lk);
+        break;
+        case carnivore:
+        iteration_c.wait(ni_lk);
+        break;
+        }
 
         entity = &entity_grid[pos_cur.i][pos_cur.j];
         entity -> age = entity-> age + 1;
 
-        isDying = !check_age(entity) || entity -> energy <= 0; //morrer de idade ou energia
-
-        if(isDying) {
-            kill_entity(entity); //ainda crítica
+       if(!check_age(entity) || entity -> energy <= 0){ //morrer de idade ou energia, precisa "se m4tar"
+            kill_entity(entity);
+            isDying = true;
         }
-        else{//se vivo
+
+        if(entity->type == empty) { // caso tenha sido morto/excluído por algum predador
+            isDying = true;
+        }
+
+       if(!isDying) {//se vivo
             /*checar a vizinhança. Vale a pena criar uma função que retorna um vetor de posições possíveis, 
             já que pode ser usado nas funções/linhas seguintes.
             por ex: 
@@ -142,7 +176,6 @@ void iteracao(pos_t pos){
                     decrementa energia.
             */
             
-
         }
 
         n_ready_threads++; //aind acrítica
@@ -193,9 +226,9 @@ int main()
         // Create the entities
         // <YOUR CODE HERE>
         
-        int num_p = (uint32_t)request_body["plants"];
-        int num_h = (uint32_t)request_body["herbivores"];
-        int num_c = (uint32_t)request_body["carnivores"];
+         num_p = (uint32_t)request_body["plants"];
+         num_h = (uint32_t)request_body["herbivores"];
+         num_c = (uint32_t)request_body["carnivores"];
 
         for (int i = 0; i<num_p+num_h+num_c; i++){
             pos_t pos;
@@ -209,7 +242,7 @@ int main()
                 else{ entity -> type = carnivore;}
                 entity -> energy = 100; //não tem problema a planta ter energia, não gasta
                 entity -> age = 0;
-                std::thread t(iteracao, pos);
+                std::thread t(iteracao, pos,entity->type);
                  t.detach();
                  n_threads++;
             }
@@ -234,17 +267,26 @@ int main()
         // <YOUR CODE HERE>
         
         std::unique_lock<std::mutex> tf_lk(m);
-        int n_threads_aux = n_threads;
-        new_iteration.notify_all();
+        int num_c_threads_aux  = num_c;
+        int num_h_threads_aux  = num_h;
+        int num_p_threads_aux  = num_p;
 
-        
+        iteration_c.notify_all();
         n_ready_threads = 0;
-
-        while(n_ready_threads < n_threads_aux) {
-            thread_finished.wait(tf_lk);
-            
+        while(n_ready_threads < num_c_threads_aux) {
+            thread_finished.wait(tf_lk);   
         }
-
+        iteration_h.notify_all();
+        n_ready_threads = 0;
+        while(n_ready_threads < num_h_threads_aux) {
+            thread_finished.wait(tf_lk);
+        }
+        iteration_p.notify_all();
+         n_ready_threads = 0;
+        while(n_ready_threads < num_p_threads_aux) {
+            thread_finished.wait(tf_lk);
+        }
+        
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
         return json_grid.dump(); });
