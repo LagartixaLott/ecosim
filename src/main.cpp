@@ -68,7 +68,45 @@ struct entity_t
     entity_type_t type;
     int32_t energy;
     int32_t age;
+
+    int32_t max_age();
+    int32_t prob_rep();
+    int32_t prob_eat();
+    int32_t prob_mov();
+
+    //ainda vou criar o vetor de adjacentes
 };
+
+int32_t entity_t::max_age(){
+    switch (this->type){
+        case plant: return PLANT_MAXIMUM_AGE;
+        case herbivore: return HERBIVORE_MAXIMUM_AGE;
+        case carnivore: return CARNIVORE_MAXIMUM_AGE;
+    }
+    return 0;
+}
+int32_t entity_t::prob_rep(){
+    switch (this->type){
+        case plant: return PLANT_REPRODUCTION_PROBABILITY;
+        case herbivore: return HERBIVORE_MOVE_PROBABILITY;
+        case carnivore: return CARNIVORE_REPRODUCTION_PROBABILITY;
+    }
+    return 0;
+}
+int32_t entity_t::prob_eat(){
+    switch (this->type){
+        case herbivore: return HERBIVORE_EAT_PROBABILITY;
+        case carnivore: return CARNIVORE_EAT_PROBABILITY;
+    }
+    return 0;
+}
+int32_t entity_t::prob_mov(){
+    switch (this->type){
+        case herbivore: return HERBIVORE_MOVE_PROBABILITY;
+        case carnivore: return CARNIVORE_MOVE_PROBABILITY;
+    }
+    return 0;
+}
 
 // Auxiliary code to convert the entity_type_t enum to a string
 NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
