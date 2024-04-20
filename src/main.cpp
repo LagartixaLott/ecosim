@@ -9,7 +9,6 @@
 #include <condition_variable>
 #include <stack>
 //#include <barrier>
-std::vector<pos_t> dead;
 int n_threads = 0;
 int n_ready_threads = 0;
 std::mutex m;
@@ -63,6 +62,7 @@ struct pos_t
     uint32_t i;
     uint32_t j;
 };
+std::vector<pos_t> dead;
 struct close_pos{
     std::stack<pos_t>  plants;
     std::stack<pos_t>  herbivores;
@@ -77,6 +77,24 @@ void empty_stack(std::stack<pos_t> pilha){
         pilha.pop();
     }
 }
+
+struct entity_t{
+
+    entity_type_t type;
+    int32_t energy;
+    int32_t age;
+
+    int32_t max_age();
+    int32_t prob_rep();
+    int32_t prob_eat();
+    int32_t prob_mov();
+    bool eat(close_pos *clos_pos);
+    bool reproduct(close_pos *clos_pos);
+    void move(close_pos *clos_pos);
+    //ainda vou criar o vetor de adjacentes
+};
+static std::vector<std::vector<entity_t>> entity_grid;
+
 
 close_pos::close_pos(pos_t pos){
    int i=pos.i;
@@ -118,21 +136,6 @@ close_pos::close_pos(pos_t pos){
     }
    }
 }
-struct entity_t{
-
-    entity_type_t type;
-    int32_t energy;
-    int32_t age;
-
-    int32_t max_age();
-    int32_t prob_rep();
-    int32_t prob_eat();
-    int32_t prob_mov();
-    bool eat(close_pos *clos_pos);
-    bool reproduct(close_pos *clos_pos);
-    void move(close_pos *clos_pos);
-    //ainda vou criar o vetor de adjacentes
-};
 
 int32_t entity_t::max_age(){
     switch (this->type){
@@ -187,8 +190,7 @@ int random_position(int max_) {
     return rand() % max_ + 1;;
 }
 
-// Grid that contains the entities
-static std::vector<std::vector<entity_t>> entity_grid;
+
 
 
 
@@ -260,7 +262,7 @@ void iteracao(pos_t pos, entity_type_t type){
         entity -> age = entity-> age + 1;
 
        for(int k=0;k<dead.size();k++){ //Ver se morreu
-          if(pos_cur==dead[k]){
+          if(pos_cur.i==dead[k].i && pos_cur.j==dead[k].j){
             isDying = true;
           }
        }
@@ -277,12 +279,13 @@ void iteracao(pos_t pos, entity_type_t type){
                     decrementa energia.
             */
         auto clos_pos = new close_pos(pos_cur);
+        /*
         if(!entity->eat(clos_pos)){
             if(!entity->reproduct(clos_pos)){
                 entity->move(clos_pos);
             }
         }
-            
+        */  
         }
 
         n_ready_threads++; //aind acrítica
