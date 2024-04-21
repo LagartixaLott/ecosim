@@ -61,6 +61,7 @@ struct pos_t
 {
     uint32_t i;
     uint32_t j;
+    pos_t(uint32_t i_, uint32_t j_): i(i_), j(j_) {};
 };
 std::vector<pos_t> dead;
 struct close_pos{
@@ -85,13 +86,19 @@ struct entity_t{
     int32_t age;
 
     int32_t max_age();
-    int32_t prob_rep();
-    int32_t prob_eat();
-    int32_t prob_mov();
+    double prob_rep();
+    double prob_eat();
+    double prob_mov();
+    entity_type_t food_type();
+    std::vector<pos_t> find(pos_t pos, entity_type_t find_type);
+
     bool eat(close_pos *clos_pos);
     bool reproduct(close_pos *clos_pos);
     void move(close_pos *clos_pos);
     //ainda vou criar o vetor de adjacentes
+
+    
+    
 };
 static std::vector<std::vector<entity_t>> entity_grid;
 
@@ -137,6 +144,7 @@ close_pos::close_pos(pos_t pos){
    }
 }
 
+
 int32_t entity_t::max_age(){
     switch (this->type){
         case plant: return PLANT_MAXIMUM_AGE;
@@ -145,7 +153,7 @@ int32_t entity_t::max_age(){
     }
     return 0;
 }
-int32_t entity_t::prob_rep(){
+double entity_t::prob_rep(){
     switch (this->type){
         case plant: return PLANT_REPRODUCTION_PROBABILITY;
         case herbivore: return HERBIVORE_MOVE_PROBABILITY;
@@ -153,19 +161,45 @@ int32_t entity_t::prob_rep(){
     }
     return 0;
 }
-int32_t entity_t::prob_eat(){
+double entity_t::prob_eat(){
     switch (this->type){
         case herbivore: return HERBIVORE_EAT_PROBABILITY;
         case carnivore: return CARNIVORE_EAT_PROBABILITY;
     }
     return 0;
 }
-int32_t entity_t::prob_mov(){
+double entity_t::prob_mov(){
     switch (this->type){
         case herbivore: return HERBIVORE_MOVE_PROBABILITY;
         case carnivore: return CARNIVORE_MOVE_PROBABILITY;
     }
     return 0;
+}
+entity_type_t entity_t::food_type(){
+    switch (this->type){
+        case herbivore: return plant;
+        case carnivore: return herbivore;
+    }
+    return empty;
+}
+std::vector<pos_t> entity_t::find(pos_t pos, entity_type_t find_type){
+    std::vector<pos_t> close_pos;
+    close_pos.clear();
+    int i = pos.i;
+    int j = pos.j;
+    if(i<NUM_ROWS-1){
+        if(entity_grid[i+1][j].type == find_type){close_pos.push_back(pos_t(i+1,j));}
+    }
+    if(j<NUM_ROWS-1){
+        if(entity_grid[i][j+1].type == find_type){close_pos.push_back(pos_t(i,j+1));}
+    }
+    if(i>0){
+        if(entity_grid[i-1][j].type == find_type){close_pos.push_back(pos_t(i-1,j));}
+    }
+    if(j>0){
+        if(entity_grid[i][j-1].type == find_type){close_pos.push_back(pos_t(i,j-1));}
+    }
+    return close_pos;
 }
 
 // Auxiliary code to convert the entity_type_t enum to a string
@@ -186,7 +220,7 @@ namespace nlohmann
 }
 
 // Function to generate a random position based on probability
-int random_position(int max_) {
+uint32_t random_position(int max_) {
     return rand() % max_ + 1;;
 }
 
@@ -230,6 +264,13 @@ void move(close_pos *clos_pos){
     
 }
 
+bool random_action(double probability) {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    std::uniform_real_distribution<> dis(0.0, 1.0);
+    return dis(gen) < probability;
+}
+
 void iteracao(pos_t pos, entity_type_t type){
     //Lembrar de,na reprodução, atualizar também a variável de tipos 
     //tratar primeiro as mortes, alimentações e reproduções
@@ -239,7 +280,7 @@ void iteracao(pos_t pos, entity_type_t type){
     pos_t pos_cur=pos;
     bool isAlive = true;
     bool isDying = false;
-    entity_t* entity=&entity_grid[pos.i][pos.j];
+    entity_t* entity = &entity_grid[pos.i][pos.j];
     while(isAlive){
 
         // Cria um objeto do tipo unique_lock que no construtor chama m.lock()
@@ -278,7 +319,31 @@ void iteracao(pos_t pos, entity_type_t type){
                     limpa a atual, e atualiza a posiçao pos da thread. é uma boa fazer uma função específica para mover a uma posição determinada.). 
                     decrementa energia.
             */
-        auto clos_pos = new close_pos(pos_cur);
+        //auto clos_pos = new close_pos(pos_cur);
+            std::vector<pos_t> preys = entity->find(pos_cur, entity->food_type());
+            std::vector<pos_t> pos_aval = entity->find(pos_cur, empty);
+            
+            if(pos_aval.size() > 0 && random_action(entity->prob_mov())){
+
+                pos_t new_pos = pos_aval.at(random_position(pos_aval.size())-1); //posição aleatoria
+
+                entity_t* new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
+
+                new_pos_entity -> age = entity -> age;
+                new_pos_entity -> energy = entity -> energy;
+                new_pos_entity -> type = entity -> type;
+                
+                entity -> type = empty;
+                entity -> age = 0;
+                entity -> energy = 0;
+
+                entity = new_pos_entity;
+                
+                pos_cur.i = new_pos.i;
+                pos_cur.j = new_pos.j;
+                
+            }
+
         /*
         if(!entity->eat(clos_pos)){
             if(!entity->reproduct(clos_pos)){
@@ -341,9 +406,9 @@ int main()
          num_c = (uint32_t)request_body["carnivores"];
 
         for (int i = 0; i<num_p+num_h+num_c; i++){
-            pos_t pos;
-            pos.i = random_position(NUM_ROWS-1);
-            pos.j = random_position(NUM_ROWS-1);
+            pos_t pos(random_position(NUM_ROWS-1), random_position(NUM_ROWS-1));
+            //pos.i = random_position(NUM_ROWS-1);
+            //pos.j = random_position(NUM_ROWS-1);
             entity_t* entity;
             entity = &entity_grid[pos.i][pos.j];
             if(entity -> type == empty){
