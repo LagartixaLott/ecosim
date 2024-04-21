@@ -295,6 +295,7 @@ void iteracao(pos_t pos, entity_type_t type){
                 if(random_action(entity->prob_eat())) {
                     //TODO
                     //matar
+                    dead.push_back(it_pos);
                     kill_entity(ent_adj);
                 }
                 preys.pop_back();//matando ou não, retira da fila
