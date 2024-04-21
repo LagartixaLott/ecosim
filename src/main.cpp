@@ -302,20 +302,44 @@ void iteracao(pos_t pos, entity_type_t type){
 
             //TODO
             //falta implementar a condição de energia.
+            pos_t pos_baby(500,500);
+            int baby=0;
             if(pos_aval.size() > 0 && random_action(entity->prob_rep())){
-                
+                  pos_t it_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
+                entity_t* baby_entity= &entity_grid[it_pos.i][it_pos.j];
+                baby_entity->type=type;
+                baby_entity->energy=100;
+                baby_entity->age=0;
+                std::thread t(iteracao, it_pos,type);
+                t.detach();
+                modify_num_type(type,1);
+                n_threads++;
+                pos_baby=it_pos;
+                baby++;
+                entity->energy=entity->energy-10;
             }
             
             //TODO
             //falta implementar a condição de energia.
-            if(pos_aval.size() > 0 && random_action(entity->prob_mov())){
-
-                // variável auxiliar new_pos. Escolhe aleatoriamente uma das posições vazias presentes no vetor 
-                pos_t new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
+          if(pos_aval.size() > 0+baby && random_action(entity->prob_mov())){
+                pos_t new_pos(500,500);
+                entity_t* new_pos_entity;
+                // variável auxiliar new_pos. Escolhe aleatoriamente uma das posições vazias presentes no vetor
+                if(baby==0){ 
+                 new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
 
                 // variável auxiliar new_pos_entity. É o endereço da posição vizinha escolhida. Excluída ao final do if.
-                entity_t* new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
-
+                 new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
+                }
+                if(baby>0){
+                    while(1){
+                        new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
+                        if(new_pos.i!=pos_baby.i || new_pos.j!=pos_baby.j){
+                            new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
+                            break;
+                        }
+                }
+                }
                 //preenche as informações da posição nova segundo a atual/antiga.
                 new_pos_entity -> age = entity -> age;
                 new_pos_entity -> energy = entity -> energy;
@@ -331,8 +355,9 @@ void iteracao(pos_t pos, entity_type_t type){
                 
                 pos_cur.i = new_pos.i;
                 pos_cur.j = new_pos.j;
-            }
-
+                entity->energy=entity->energy-5;
+          }
+             baby=0;
         /*
         if(!entity->eat(clos_pos)){
             if(!entity->reproduct(clos_pos)){
