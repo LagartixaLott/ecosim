@@ -13,20 +13,24 @@ int n_threads = 0;
 int n_ready_threads = 0;
 std::mutex m;
 //Número de plantas
-int num_p;
+int num_threads_p = 0;
 //Número de herbívoros
-int num_h;
+int num_threads_h = 0;
 //Número de carnívoros
-int num_c;
+int num_threads_c = 0;
 //std::mutex take_action;
 std::condition_variable new_iteration;
-std::condition_variable thread_finished;
+std::condition_variable thread_ready;
+std::condition_variable get_finished;
+
 //iteração planta
 std::condition_variable iteration_p;
 //iteração herbívoro
 std::condition_variable iteration_h;
 //iteração carnívoro
 std::condition_variable iteration_c;
+
+bool running = false;
 
 //std::mutex ni_m;
 //std::mutex tf_m;
@@ -71,6 +75,9 @@ struct entity_t{
     entity_type_t type;
     int32_t energy;
     int32_t age;
+    bool killed = false;
+
+    void die();
 
     int32_t max_age();
     //probabilidade de reproduzir
@@ -81,7 +88,7 @@ struct entity_t{
     double prob_mov();
 
     //minimo para reproduzir
-    int32_t min_rep() { return (this->type == plant) ? 0 : THRESHOLD_ENERGY_FOR_REPRODUCTION;}; // retorna 0 se planta, 10 caso contrário
+    int32_t min_rep() { return (this->type == plant) ? 0 : THRESHOLD_ENERGY_FOR_REPRODUCTION;}; // retorna 0 se planta, THRESHOLD_ENERGY_FOR_REPRODUCTION caso contrário
     //custo para reproduzir
     int32_t cost_rep() {return (this->type == plant) ? 0 : 10;}; // retorna 0 se planta, 10 caso contrário
     //ganho ao comer
@@ -100,7 +107,10 @@ struct entity_t{
     void move();
     //ainda vou criar o vetor de adjacentes
 
-    
+    void inc_num_thread_t();
+    void dec_num_thread_t();
+
+    bool natural_death();
     
 };
 static std::vector<std::vector<entity_t>> entity_grid;
@@ -118,7 +128,7 @@ int32_t entity_t::max_age(){
 double entity_t::prob_rep(){
     switch (this->type){
         case plant: return PLANT_REPRODUCTION_PROBABILITY;
-        case herbivore: return HERBIVORE_MOVE_PROBABILITY;
+        case herbivore: return HERBIVORE_REPRODUCTION_PROBABILITY;
         case carnivore: return CARNIVORE_REPRODUCTION_PROBABILITY;
     }
     return 0;
@@ -152,16 +162,16 @@ std::vector<pos_t> entity_t::close_pos(pos_t pos, entity_type_t find_type){
     int i = pos.i;
     int j = pos.j;
     if(i<NUM_ROWS-1){
-        if(entity_grid[i+1][j].type == find_type){close_pos.push_back(pos_t(i+1,j));}
+        if(entity_grid[i+1][j].type == find_type && entity_grid[i+1][j].killed == false){close_pos.push_back(pos_t(i+1,j));}
     }
     if(j<NUM_ROWS-1){
-        if(entity_grid[i][j+1].type == find_type){close_pos.push_back(pos_t(i,j+1));}
+        if(entity_grid[i][j+1].type == find_type && entity_grid[i][j+1].killed == false){close_pos.push_back(pos_t(i,j+1));}
     }
     if(i>0){
-        if(entity_grid[i-1][j].type == find_type){close_pos.push_back(pos_t(i-1,j));}
+        if(entity_grid[i-1][j].type == find_type && entity_grid[i-1][j].killed == false){close_pos.push_back(pos_t(i-1,j));}
     }
     if(j>0){
-        if(entity_grid[i][j-1].type == find_type){close_pos.push_back(pos_t(i,j-1));}
+        if(entity_grid[i][j-1].type == find_type && entity_grid[i][j-1].killed == false){close_pos.push_back(pos_t(i,j-1));}
     }
     return close_pos;
 }
@@ -189,28 +199,29 @@ uint32_t random_integer(int max_) {
 }
 
 
-bool check_age(entity_t* entity){
-    uint32_t max_age = 0;
-    switch (entity -> type){
-        case plant: max_age = PLANT_MAXIMUM_AGE; break;
-        case herbivore: max_age = HERBIVORE_MAXIMUM_AGE; break;
-        case carnivore: max_age = CARNIVORE_MAXIMUM_AGE; break;
-    }
-    if(entity -> age > max_age) then: return false;
-    return true;
-}
-void modify_num_type(entity_type_t type, int value){
-    switch (type){
-        case plant: num_p += value; break;
-        case herbivore: num_h += value; break;
-        case carnivore: num_c += value; break;
+// incrementa o número de threads correspondente ao seu tipo
+void entity_t::inc_num_thread_t(){
+    switch(this->type){
+        case plant: num_threads_p++; break;
+        case herbivore: num_threads_h++; break;
+        case carnivore: num_threads_c++; break;
     }
 }
-void kill_entity(entity_t* entity){
-    modify_num_type(entity->type,-1);
-    entity -> type = empty;
-    entity -> age = 0;
-    entity -> energy = 0;
+// decrementa o número de threads correspondente ao seu tipo
+void entity_t::dec_num_thread_t(){
+    switch(this->type){
+        case plant: num_threads_p--; break;
+        case herbivore: num_threads_h--; break;
+        case carnivore: num_threads_c--; break;
+    }
+}
+
+void entity_t::die(){
+    this -> dec_num_thread_t();
+    this -> type = empty;
+    this -> age = 0;
+    this -> energy = 0;
+    this -> killed = false;
 }
 
 void entity_t::eat(){
@@ -247,7 +258,30 @@ void iteracao(pos_t pos, entity_type_t type){
         // Cria um objeto do tipo unique_lock que no construtor chama m.lock()
 		std::unique_lock<std::mutex> ni_lk(m);
 
-        //new_iteration.wait(ni_lk);
+        new_iteration.wait(ni_lk);
+
+        //atualiza os valores de entidade
+        entity = &entity_grid[pos_cur.i][pos_cur.j];
+        //atualiza a idade
+        entity -> age = entity-> age + 1;
+
+        //confere a idade
+        if (entity->age > entity->max_age()){
+            entity -> die();
+            isDying = true;
+        }
+
+        n_ready_threads++;
+        thread_ready.notify_one();
+
+        if(isDying) {
+            isAlive = false;
+            break; // sai da função
+        }
+
+
+        // caso esteja vivo, avisa que está pronto e espera o notify do seu tipo.
+
         switch(type){
         case plant:
         iteration_p.wait(ni_lk);
@@ -260,15 +294,16 @@ void iteracao(pos_t pos, entity_type_t type){
         break;
         }
 
+        //atualiza os valores de entidade
         entity = &entity_grid[pos_cur.i][pos_cur.j];
-        entity -> age = entity-> age + 1;
 
-       for(int k=0;k<dead.size();k++){ //Ver se morreu
-          if(pos_cur.i==dead[k].i && pos_cur.j==dead[k].j){
+        if(entity->killed == true){ ///caso ele tenha sido morto por alguma thread anterior
+            entity->die();
             isDying = true;
-          }
-       }
-       if(!isDying) {//se vivo
+        }
+
+        //se vivo
+        if(!isDying) {
             /*checar a vizinhança. Vale a pena criar uma função que retorna um vetor de posições possíveis, 
             já que pode ser usado nas funções/linhas seguintes.
             por ex: 
@@ -280,7 +315,7 @@ void iteracao(pos_t pos, entity_type_t type){
                     limpa a atual, e atualiza a posiçao pos da thread. é uma boa fazer uma função específica para mover a uma posição determinada.). 
                     decrementa energia.
             */
-           
+        
             //recebe as posições adjacentes em que há alguma presa. No caso de carnívoro: herbívoro; caso herbívoro, planta.
             std::vector<pos_t> pos_aval = entity->close_pos(pos_cur, empty);
             //recebe as posições adjacentes vazias
@@ -293,54 +328,38 @@ void iteracao(pos_t pos, entity_type_t type){
                 //TODO
                 //continuar o código...
                 if(random_action(entity->prob_eat())) {
-                    //TODO
                     //matar
-                    dead.push_back(it_pos);
-                    kill_entity(ent_adj);
+                    ent_adj->killed = true;
+                    //ganho de energia ao matar
+                    entity->energy += entity->gain_eat();
+                    if(entity->energy >= MAXIMUM_ENERGY) entity->energy = MAXIMUM_ENERGY;
                 }
                 preys.pop_back();//matando ou não, retira da fila
             }
 
-            //TODO
-            //falta implementar a condição de energia.
-            pos_t pos_baby(500,500);
-            int baby=0;
             if(pos_aval.size() > 0 && random_action(entity->prob_rep())){
-                  pos_t it_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
+                int item = random_integer(pos_aval.size())-1;
+                pos_t it_pos = pos_aval.at(item); //posição aleatoria
+                pos_aval.erase(pos_aval.begin()+item); // ao reproduzir, remove o local entre os locais disponíveis.
                 entity_t* baby_entity= &entity_grid[it_pos.i][it_pos.j];
                 baby_entity->type=type;
                 baby_entity->energy=100;
                 baby_entity->age=0;
                 std::thread t(iteracao, it_pos,type);
                 t.detach();
-                modify_num_type(type,1);
-                n_threads++;
-                pos_baby=it_pos;
-                baby++;
-                entity->energy=entity->energy-10;
+                baby_entity->inc_num_thread_t(); //incrementa o número de threads correspondente ao seu tipo. 
+                entity->energy -= entity->cost_rep();
             }
             
-            //TODO
-            //falta implementar a condição de energia.
-          if(pos_aval.size() > 0+baby && random_action(entity->prob_mov())){
+            if(pos_aval.size() > 0 && random_action(entity->prob_mov())){
                 pos_t new_pos(500,500);
                 entity_t* new_pos_entity;
                 // variável auxiliar new_pos. Escolhe aleatoriamente uma das posições vazias presentes no vetor
-                if(baby==0){ 
-                 new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
+                new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
 
                 // variável auxiliar new_pos_entity. É o endereço da posição vizinha escolhida. Excluída ao final do if.
-                 new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
-                }
-                if(baby>0){
-                    while(1){
-                        new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
-                        if(new_pos.i!=pos_baby.i || new_pos.j!=pos_baby.j){
-                            new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
-                            break;
-                        }
-                }
-                }
+                new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
+                
                 //preenche as informações da posição nova segundo a atual/antiga.
                 new_pos_entity -> age = entity -> age;
                 new_pos_entity -> energy = entity -> energy;
@@ -356,10 +375,18 @@ void iteracao(pos_t pos, entity_type_t type){
                 
                 pos_cur.i = new_pos.i;
                 pos_cur.j = new_pos.j;
-                entity->energy=entity->energy-5;
-          }
-             baby=0;
-        /*
+                
+                entity->energy -= entity-> cost_move();
+            }
+
+            //confere a energia
+            if (entity->energy <= 0){
+                entity->die();
+                isDying = true;
+            }
+
+           // if(entity->natural_death()) isDying = true;
+            /*
         if(!entity->eat(clos_pos)){
             if(!entity->reproduct(clos_pos)){
                 entity->move(clos_pos);
@@ -368,15 +395,13 @@ void iteracao(pos_t pos, entity_type_t type){
         */  
         }
 
-        n_ready_threads++; //aind acrítica
-        thread_finished.notify_one(); // fim crítico
+        n_ready_threads++;
+        thread_ready.notify_one();
 
-        if(isDying){
+        if(isDying) {
             isAlive = false;
-            
-            //sai da função
+            break; // sai da função
         }
-
     }
     
 }
@@ -397,6 +422,20 @@ int main()
     CROW_ROUTE(app, "/start-simulation")
         .methods("POST"_method)([](crow::request &req, crow::response &res)
                                 { 
+
+        std::unique_lock<std::mutex> lk(m);
+
+        if(running == true){
+            running = false;
+
+            thread_ready.notify_one();
+            //thread_ready.notify_one();
+
+            //get_finished.wait(lk);
+        }
+
+        
+
         // Parse the JSON request body
         nlohmann::json request_body = nlohmann::json::parse(req.body);
 
@@ -416,30 +455,32 @@ int main()
         // Create the entities
         // <YOUR CODE HERE>
         
-         num_p = (uint32_t)request_body["plants"];
-         num_h = (uint32_t)request_body["herbivores"];
-         num_c = (uint32_t)request_body["carnivores"];
+         int num_p = (uint32_t)request_body["plants"];
+         int num_h = (uint32_t)request_body["herbivores"];
+         int num_c = (uint32_t)request_body["carnivores"];
 
         for (int i = 0; i<num_p+num_h+num_c; i++){
             pos_t pos(random_integer(NUM_ROWS-1), random_integer(NUM_ROWS-1));
             //pos.i = random_integer(NUM_ROWS-1);
             //pos.j = random_integer(NUM_ROWS-1);
-            entity_t* entity;
-            entity = &entity_grid[pos.i][pos.j];
-            if(entity -> type == empty){
-                if(i<num_p){ entity -> type = plant;}
-                else if(i<num_p+num_h){ entity -> type = herbivore;}
-                else{ entity -> type = carnivore;}
-                entity -> energy = 100; //não tem problema a planta ter energia, não gasta
-                entity -> age = 0;
-                std::thread t(iteracao, pos,entity->type);
+            entity_t* baby_entity;
+            baby_entity = &entity_grid[pos.i][pos.j];
+            if(baby_entity -> type == empty){
+                if(i<num_p){ baby_entity -> type = plant;}
+                else if(i<num_p+num_h){ baby_entity -> type = herbivore;}
+                else{ baby_entity -> type = carnivore;}
+                baby_entity -> energy = 100; //não tem problema a planta ter energia, não gasta
+                baby_entity -> age = 0;
+                std::thread t(iteracao, pos,baby_entity->type);
                  t.detach();
-                 n_threads++;
+                baby_entity -> inc_num_thread_t();
             }
             else{
                 i--;
             }
         }
+
+        running = true;
 
 
         // Return the JSON representation of the entity grid
@@ -457,33 +498,44 @@ int main()
         // <YOUR CODE HERE>
         
         std::unique_lock<std::mutex> tf_lk(m);
-        int num_c_threads_aux  = num_c;
-        int num_h_threads_aux  = num_h;
-        int num_p_threads_aux  = num_p;
-        dead.clear();
-        for(int i_=0;i_<15;i_++){
-            for(int j_=0;j_<15;j_++){
-                if(entity_grid[i_][j_].age==entity_grid[i_][j_].max_age() || entity_grid[i_][j_].energy<=0){
-                   kill_entity(&entity_grid[i_][j_]);
-                   dead.emplace_back(pos_t(i_,j_));
-                }
-            }
+        // quantiadade de threads (c+h+p) ativos no momento do new_iteration.notify_all();
+        int num_threads_aux  = num_threads_c + num_threads_h + num_threads_p; 
+        
+        
+        new_iteration.notify_all();
+        n_ready_threads = 0;
+        while(n_ready_threads < num_threads_aux && running) {
+            thread_ready.wait(tf_lk);   
         }
+
+        // quantiadade de threads_c ativos no momento do iteration_c.notify_all();
+        int num_c_threads_aux  = num_threads_c; 
+        // quantiadade de threads_h ativos no momento do iteration_h.notify_all();
+        int num_h_threads_aux  = num_threads_h;
+        // quantiadade de threads_p ativos no momento do iteration_p.notify_all();
+        int num_p_threads_aux  = num_threads_p;
+
         iteration_c.notify_all();
         n_ready_threads = 0;
-        while(n_ready_threads < num_c_threads_aux) {
-            thread_finished.wait(tf_lk);   
+        while(n_ready_threads < num_c_threads_aux && running) {
+            thread_ready.wait(tf_lk);   
         }
+
+
         iteration_h.notify_all();
         n_ready_threads = 0;
-        while(n_ready_threads < num_h_threads_aux) {
-            thread_finished.wait(tf_lk);
+        while(n_ready_threads < num_h_threads_aux && running) {
+            thread_ready.wait(tf_lk);
         }
+
+
         iteration_p.notify_all();
-         n_ready_threads = 0;
-        while(n_ready_threads < num_p_threads_aux) {
-            thread_finished.wait(tf_lk);
+        n_ready_threads = 0;
+        while(n_ready_threads < num_p_threads_aux && running) {
+            thread_ready.wait(tf_lk);
         }
+
+        //get_finished.notify_all();
         
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
