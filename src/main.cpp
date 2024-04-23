@@ -338,6 +338,7 @@ void iteracao(pos_t pos, entity_type_t type){
             std::vector<pos_t> pos_aval = entity->close_pos(pos_cur, empty);
 
             // reproduzir
+            if(entity->energy>20){
             if(pos_aval.size() > 0 && random_action(entity->prob_rep())){
                 int item = random_integer(pos_aval.size())-1;
                 pos_t it_pos = pos_aval.at(item); //posição aleatoria
@@ -351,8 +352,9 @@ void iteracao(pos_t pos, entity_type_t type){
                 baby_entity->inc_num_thread_t(); //incrementa o número de threads correspondente ao seu tipo. 
                 entity->energy -= entity->cost_rep();
             }
-            
+            }
             // mover
+            if(entity->energy >= entity->cost_move()){
             if(pos_aval.size() > 0 && random_action(entity->prob_mov())){
                 pos_t new_pos(500,500);
                 entity_t* new_pos_entity;
@@ -388,7 +390,7 @@ void iteracao(pos_t pos, entity_type_t type){
             }
 
         }
-
+        }
         n_ready_threads++;
         thread_ready.notify_one(); // avisa ao main que terminou a ação / iteração
 
