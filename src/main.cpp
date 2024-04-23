@@ -76,15 +76,24 @@ struct entity_t{
     entity_type_t type;
     int32_t energy;
     int32_t age;
+
+    //true caso tenha sido morto por alguma entidade na iteração
     bool killed = false;
 
     void die();
 
+    // retorna a idade máxima do seu tipo
     int32_t max_age();
+
+    // retorna o tipo de presa do seu tipo
+    entity_type_t prey_type(); 
+
     //probabilidade de reproduzir
     double prob_rep();
+
     //probabilidade de comer
     double prob_eat();
+
     //probabilidade de reproduzir
     double prob_mov();
 
@@ -97,21 +106,16 @@ struct entity_t{
     //custo para mover-se
     int32_t cost_move(){ return 5;}; // poderia colocar como const... mas deixei assim para seguir o padrão
 
-
-    entity_type_t prey_type();
+    
 
     // faz uma analise das posições adjacentes. Retorna um vetor com as posições 
     std::vector<pos_t> close_pos(pos_t pos, entity_type_t find_type); 
 
-    void eat();
-    void reproduct();
-    void move();
-    //ainda vou criar o vetor de adjacentes
-
+    // incrementa a variável que indica a quantidade de threads/entidades do seu tipo
     void inc_num_thread_t();
+    // decrementa a variável que indica a quantidade de threads/entidades do seu tipo
     void dec_num_thread_t();
 
-    bool natural_death();
     
 };
 static std::vector<std::vector<entity_t>> entity_grid;
@@ -177,6 +181,8 @@ std::vector<pos_t> entity_t::close_pos(pos_t pos, entity_type_t find_type){
     return close_pos;
 }
 
+
+//CÓDIGOS PADRÃO/ORIGINAL ini
 // Auxiliary code to convert the entity_type_t enum to a string
 NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
                                                 {empty, " "},
@@ -193,12 +199,12 @@ namespace nlohmann
         j = nlohmann::json{{"type", e.type}, {"energy", e.energy}, {"age", e.age}};
     }
 }
+//CÓDIGOS PADRÃO/ORIGINAL fim
 
-// Function to generate a random position based on probability
+// retorna um inteiro de 0 a int max_
 uint32_t random_integer(int max_) {
     return rand() % max_ + 1;;
 }
-
 
 // incrementa o número de threads correspondente ao seu tipo
 void entity_t::inc_num_thread_t(){
@@ -216,7 +222,7 @@ void entity_t::dec_num_thread_t(){
         case carnivore: num_threads_c--; break;
     }
 }
-
+// ao morrer, esvazia os campos da sua posição no array entity_grid, e decrementa a quantidade do seu tipo
 void entity_t::die(){
     this -> dec_num_thread_t();
     this -> type = empty;
@@ -225,17 +231,6 @@ void entity_t::die(){
     this -> killed = false;
 }
 
-void entity_t::eat(){
-    
-}
-
-void entity_t::reproduct(){
-    
-}
-
-void entity_t::move(){
-    
-}
 
 bool random_action(double probability) {
     static std::random_device rd;
@@ -370,7 +365,7 @@ void iteracao(pos_t pos, entity_type_t type){
                 entity->energy -= entity-> cost_move();
             }
 
-            //checar energia
+            //confere a energia
             if (entity->energy <= 0){
                 entity->die();
                 isDying = true;
