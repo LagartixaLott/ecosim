@@ -1,3 +1,5 @@
+//MAIS ANTIGO, consertado
+
 #define CROW_MAIN
 #define CROW_STATIC_DIR "../public"
 
@@ -28,9 +30,6 @@ std::condition_variable iteration_p;
 std::condition_variable iteration_h;
 //vez da iteração do carnívoro
 std::condition_variable iteration_c;
-
-//autorizar todas as entidades a mover-se
-std::condition_variable iteration_move;
 
 //toda vez que alguma ação é finalizada, avisa ao main
 std::condition_variable thread_ready;
@@ -316,9 +315,8 @@ void iteracao(pos_t pos, entity_type_t type){
         // se vivo
         if(!isDying) {
         
+            
             // recebe as posições adjacentes em que há alguma presa. No caso de carnívoro: herbívoro; caso herbívoro, planta.
-            std::vector<pos_t> pos_aval = entity->close_pos(pos_cur, empty);
-            // recebe as posições adjacentes vazias
             std::vector<pos_t> preys = entity->close_pos(pos_cur, entity->prey_type());
             
             // comer
@@ -335,6 +333,9 @@ void iteracao(pos_t pos, entity_type_t type){
                 }
                 preys.pop_back();//matando ou não, retira da fila
             }
+
+            // recebe as posições adjacentes vazias
+            std::vector<pos_t> pos_aval = entity->close_pos(pos_cur, empty);
 
             // reproduzir
             if(pos_aval.size() > 0 && random_action(entity->prob_rep())){
@@ -466,6 +467,8 @@ int main()
                 i--;
             }
         }
+
+        running = true;
 
 
         // Return the JSON representation of the entity grid
