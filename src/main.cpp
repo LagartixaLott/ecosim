@@ -19,21 +19,23 @@ int num_threads_h = 0;
 //Número de carnívoros em execução
 int num_threads_c = 0;
 
-//usado para autorizar todas as entidades a checar se irão morrer de idade
-std::condition_variable new_iteration;
-std::condition_variable thread_ready;
+//autorizar todas as entidades a checar se irão morrer de idade
+std::condition_variable iteration_ages;
 
-//iteração planta
+//vez da iteração da planta
 std::condition_variable iteration_p;
-//iteração herbívoro
+//vez da iteração do herbívoro
 std::condition_variable iteration_h;
-//iteração carnívoro
+//vez da iteração do carnívoro
 std::condition_variable iteration_c;
 
-bool running = false;
+//autorizar todas as entidades a mover-se
+std::condition_variable iteration_move;
 
-//std::mutex ni_m;
-//std::mutex tf_m;
+//toda vez que alguma ação é finalizada, avisa ao main
+std::condition_variable thread_ready;
+
+
 static const uint32_t NUM_ROWS = 15;
 
 // Constants
@@ -263,7 +265,7 @@ void iteracao(pos_t pos, entity_type_t type){
         // Cria um objeto do tipo unique_lock que no construtor chama m.lock()
 		std::unique_lock<std::mutex> ni_lk(m);
 
-        new_iteration.wait(ni_lk);
+        iteration_ages.wait(ni_lk);
 
         // atualiza os valores de entidade
         entity = &entity_grid[pos_cur.i][pos_cur.j];
@@ -289,20 +291,24 @@ void iteracao(pos_t pos, entity_type_t type){
 
         switch(type){
         case plant:
-        iteration_p.wait(ni_lk);//caso planta, espera a chamada de plantas (após a de herbívoros)
-        break;
+            // caso planta, espera a chamada de plantas (após a de herbívoros)
+            iteration_p.wait(ni_lk);
+            break;
         case herbivore:
-        iteration_h.wait(ni_lk); //caso herbívoro, espera a chamada de herbívoro (após a de carnívoros)
-        break;
+            // caso herbívoro, espera a chamada de herbívoro (após a de carnívoros)
+            iteration_h.wait(ni_lk);
+            break;
         case carnivore:
-        iteration_c.wait(ni_lk); //caso carnívoro, espera a chamada de carnívoro (a primeira após a checagem de idade das entidades)
-        break;
+            // caso carnívoro, espera a chamada de carnívoro (a primeira após a checagem de idade das entidades)
+            iteration_c.wait(ni_lk); 
+            break;
         }
 
         // atualiza os valores de entidade
         entity = &entity_grid[pos_cur.i][pos_cur.j];
 
-        if(entity->killed == true){ ///caso ele tenha sido morto por alguma entidade/thread anterior
+        // caso ele tenha sido morto por alguma entidade/thread anterior
+        if(entity->killed == true){ 
             entity->die();
             isDying = true;
         }
@@ -393,7 +399,7 @@ void iteracao(pos_t pos, entity_type_t type){
     
 }
 
-bool finished = false;
+bool running = false;
 
 int main()
 {
@@ -411,6 +417,9 @@ int main()
         .methods("POST"_method)([](crow::request &req, crow::response &res)
                                 { 
 
+        std::unique_lock<std::mutex> lk(m);
+        running = false;
+        thread_ready.notify_one();
 
         // Parse the JSON request body
         nlohmann::json request_body = nlohmann::json::parse(req.body);
@@ -441,8 +450,6 @@ int main()
 
         for (int i = 0; i<num_p+num_h+num_c; i++){
             pos_t pos(random_integer(NUM_ROWS-1), random_integer(NUM_ROWS-1));
-            //pos.i = random_integer(NUM_ROWS-1);
-            //pos.j = random_integer(NUM_ROWS-1);
             entity_t* baby_entity;
             baby_entity = &entity_grid[pos.i][pos.j];
             if(baby_entity -> type == empty){
@@ -459,8 +466,6 @@ int main()
                 i--;
             }
         }
-
-        running = true;
 
 
         // Return the JSON representation of the entity grid
@@ -481,14 +486,13 @@ int main()
         // quantiadade de threads (c+h+p) ativos no momento do new_iteration.notify_all();
         int num_threads_aux  = num_threads_c + num_threads_h + num_threads_p; 
         
-        finished = false;
 
         // avisa a todos que o get foi solicitado
-        new_iteration.notify_all();
+        iteration_ages.notify_all();
         n_ready_threads = 0;
 
         // aguarda até que todas as entidades tenham checado suas idades
-        while(n_ready_threads < num_threads_aux) {
+        while(n_ready_threads < num_threads_aux && running) {
             thread_ready.wait(tf_lk);   
         }
 
@@ -504,7 +508,7 @@ int main()
         n_ready_threads = 0;
 
         //aguarda que todos os carnívoros realizem suas ações da iteração
-        while(n_ready_threads < num_c_threads_aux) {
+        while(n_ready_threads < num_c_threads_aux && running) {
             thread_ready.wait(tf_lk);   
         }
 
@@ -513,7 +517,7 @@ int main()
         n_ready_threads = 0;
 
         // aguarda que todos os herbívoros realizem suas ações da iteração
-        while(n_ready_threads < num_h_threads_aux) {
+        while(n_ready_threads < num_h_threads_aux && running) {
             thread_ready.wait(tf_lk);
         }
 
@@ -522,7 +526,7 @@ int main()
         n_ready_threads = 0;
 
         // aguarda que todas as plantas realizem suas ações da iteração
-        while(n_ready_threads < num_p_threads_aux) {
+        while(n_ready_threads < num_p_threads_aux && running) {
             thread_ready.wait(tf_lk);
         }
 
