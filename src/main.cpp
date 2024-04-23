@@ -22,7 +22,6 @@ int num_threads_c = 0;
 //usado para autorizar todas as entidades a checar se irão morrer de idade
 std::condition_variable new_iteration;
 std::condition_variable thread_ready;
-std::condition_variable get_finished;
 
 //iteração planta
 std::condition_variable iteration_p;
@@ -394,6 +393,7 @@ void iteracao(pos_t pos, entity_type_t type){
     
 }
 
+bool finished = false;
 
 int main()
 {
@@ -411,18 +411,6 @@ int main()
         .methods("POST"_method)([](crow::request &req, crow::response &res)
                                 { 
 
-        std::unique_lock<std::mutex> lk(m);
-
-        if(running == true){
-            running = false;
-
-            thread_ready.notify_one();
-            //thread_ready.notify_one();
-
-            //get_finished.wait(lk);
-        }
-
-        
 
         // Parse the JSON request body
         nlohmann::json request_body = nlohmann::json::parse(req.body);
@@ -442,10 +430,14 @@ int main()
         
         // Create the entities
         // <YOUR CODE HERE>
+
+        num_threads_c = 0; // reseta a quantidade de threads rodando
+        num_threads_h = 0; // reseta a quantidade de threads rodando
+        num_threads_p = 0; // reseta a quantidade de threads rodando
         
-         int num_p = (uint32_t)request_body["plants"];
-         int num_h = (uint32_t)request_body["herbivores"];
-         int num_c = (uint32_t)request_body["carnivores"];
+        int num_p = (uint32_t)request_body["plants"];
+        int num_h = (uint32_t)request_body["herbivores"];
+        int num_c = (uint32_t)request_body["carnivores"];
 
         for (int i = 0; i<num_p+num_h+num_c; i++){
             pos_t pos(random_integer(NUM_ROWS-1), random_integer(NUM_ROWS-1));
@@ -489,12 +481,14 @@ int main()
         // quantiadade de threads (c+h+p) ativos no momento do new_iteration.notify_all();
         int num_threads_aux  = num_threads_c + num_threads_h + num_threads_p; 
         
+        finished = false;
+
         // avisa a todos que o get foi solicitado
         new_iteration.notify_all();
         n_ready_threads = 0;
 
         // aguarda até que todas as entidades tenham checado suas idades
-        while(n_ready_threads < num_threads_aux && running) {
+        while(n_ready_threads < num_threads_aux) {
             thread_ready.wait(tf_lk);   
         }
 
@@ -510,7 +504,7 @@ int main()
         n_ready_threads = 0;
 
         //aguarda que todos os carnívoros realizem suas ações da iteração
-        while(n_ready_threads < num_c_threads_aux && running) {
+        while(n_ready_threads < num_c_threads_aux) {
             thread_ready.wait(tf_lk);   
         }
 
@@ -519,7 +513,7 @@ int main()
         n_ready_threads = 0;
 
         // aguarda que todos os herbívoros realizem suas ações da iteração
-        while(n_ready_threads < num_h_threads_aux && running) {
+        while(n_ready_threads < num_h_threads_aux) {
             thread_ready.wait(tf_lk);
         }
 
@@ -528,11 +522,10 @@ int main()
         n_ready_threads = 0;
 
         // aguarda que todas as plantas realizem suas ações da iteração
-        while(n_ready_threads < num_p_threads_aux && running) {
+        while(n_ready_threads < num_p_threads_aux) {
             thread_ready.wait(tf_lk);
         }
 
-        // get_finished.notify_all();
         
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
