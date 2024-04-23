@@ -80,6 +80,7 @@ struct entity_t{
     //true caso tenha sido morto por alguma entidade na iteração
     bool killed = false;
 
+    // ao morrer, esvazia os campos da sua posição no array entity_grid, e decrementa a quantidade do seu tipo
     void die();
 
     // retorna a idade máxima do seu tipo
@@ -88,25 +89,25 @@ struct entity_t{
     // retorna o tipo de presa do seu tipo
     entity_type_t prey_type(); 
 
-    //probabilidade de reproduzir
+    //Probabilidade:
+
+    //  probabilidade de reproduzir
     double prob_rep();
-
-    //probabilidade de comer
+    //  probabilidade de comer
     double prob_eat();
-
-    //probabilidade de reproduzir
+    //  probabilidade de reproduzir
     double prob_mov();
 
-    //minimo para reproduzir
-    int32_t min_rep() { return (this->type == plant) ? 0 : THRESHOLD_ENERGY_FOR_REPRODUCTION;}; // retorna 0 se planta, THRESHOLD_ENERGY_FOR_REPRODUCTION caso contrário
-    //custo para reproduzir
-    int32_t cost_rep() {return (this->type == plant) ? 0 : 10;}; // retorna 0 se planta, 10 caso contrário
-    //ganho ao comer
-    int32_t gain_eat() {return (this->type == herbivore) ? 30 : 20;}; // retorna 30 se herbivoro, 20 caso carnivoro. Plantas não comem.
-    //custo para mover-se
-    int32_t cost_move(){ return 5;}; // poderia colocar como const... mas deixei assim para seguir o padrão
+    //Energia:
 
-    
+    // mínimo de energia para reproduzir
+    int32_t min_rep() { return (this->type == plant) ? 0 : THRESHOLD_ENERGY_FOR_REPRODUCTION;}; // retorna 0 se planta, THRESHOLD_ENERGY_FOR_REPRODUCTION caso contrário
+    // custo de energia para reproduzir
+    int32_t cost_rep() {return (this->type == plant) ? 0 : 10;}; // retorna 0 se planta, 10 caso contrário
+    // ganho de energia ao comer
+    int32_t gain_eat() {return (this->type == herbivore) ? 30 : 20;}; // retorna 30 se herbivoro, 20 caso carnivoro. Plantas não comem.
+    // custo de energia para mover-se
+    int32_t cost_move(){ return 5;}; // poderia colocar como const... mas deixei assim para seguir o padrão
 
     // faz uma analise das posições adjacentes. Retorna um vetor com as posições 
     std::vector<pos_t> close_pos(pos_t pos, entity_type_t find_type); 
@@ -240,11 +241,6 @@ bool random_action(double probability) {
 }
 
 void iteracao(pos_t pos, entity_type_t type){
-    //Lembrar de,na reprodução, atualizar também a variável de tipos 
-    //tratar primeiro as mortes, alimentações e reproduções
-    //por último se ele vai andar
-    //deve haver um lock no inicio 
-    //deve haver um wait() caso a ação seja de reprodução ou andar
     pos_t pos_cur=pos;
     bool isAlive = true;
     bool isDying = false;
@@ -256,9 +252,9 @@ void iteracao(pos_t pos, entity_type_t type){
 
         new_iteration.wait(ni_lk);
 
-        //atualiza os valores de entidade
+        // atualiza os valores de entidade
         entity = &entity_grid[pos_cur.i][pos_cur.j];
-        //atualiza a idade
+        // atualiza a idade
         entity -> age = entity-> age + 1;
 
         //confere a idade
@@ -290,7 +286,7 @@ void iteracao(pos_t pos, entity_type_t type){
         break;
         }
 
-        //atualiza os valores de entidade
+        // atualiza os valores de entidade
         entity = &entity_grid[pos_cur.i][pos_cur.j];
 
         if(entity->killed == true){ ///caso ele tenha sido morto por alguma entidade/thread anterior
@@ -298,15 +294,15 @@ void iteracao(pos_t pos, entity_type_t type){
             isDying = true;
         }
 
-        //se vivo
+        // se vivo
         if(!isDying) {
         
-            //recebe as posições adjacentes em que há alguma presa. No caso de carnívoro: herbívoro; caso herbívoro, planta.
+            // recebe as posições adjacentes em que há alguma presa. No caso de carnívoro: herbívoro; caso herbívoro, planta.
             std::vector<pos_t> pos_aval = entity->close_pos(pos_cur, empty);
-            //recebe as posições adjacentes vazias
+            // recebe as posições adjacentes vazias
             std::vector<pos_t> preys = entity->close_pos(pos_cur, entity->prey_type());
             
-            //comer
+            // comer
             while(preys.size()>0){ //confere cada um das prezas que estiverem adjacentes
                 pos_t it_pos = preys.back(); // pega o ultimo da fila.
                 entity_t* ent_adj = &entity_grid[it_pos.i][it_pos.j]; // ponteiro auxiliar, da entidade (presa) da posição correspondente
@@ -321,7 +317,7 @@ void iteracao(pos_t pos, entity_type_t type){
                 preys.pop_back();//matando ou não, retira da fila
             }
 
-            //reproduzir
+            // reproduzir
             if(pos_aval.size() > 0 && random_action(entity->prob_rep())){
                 int item = random_integer(pos_aval.size())-1;
                 pos_t it_pos = pos_aval.at(item); //posição aleatoria
@@ -336,7 +332,7 @@ void iteracao(pos_t pos, entity_type_t type){
                 entity->energy -= entity->cost_rep();
             }
             
-            //mover
+            // mover
             if(pos_aval.size() > 0 && random_action(entity->prob_mov())){
                 pos_t new_pos(500,500);
                 entity_t* new_pos_entity;
@@ -346,17 +342,17 @@ void iteracao(pos_t pos, entity_type_t type){
                 // variável auxiliar new_pos_entity. É o endereço da posição vizinha escolhida. Excluída ao final do if.
                 new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
                 
-                //preenche as informações da posição nova segundo a atual/antiga.
+                // preenche as informações da posição nova segundo a atual/antiga.
                 new_pos_entity -> age = entity -> age;
                 new_pos_entity -> energy = entity -> energy;
                 new_pos_entity -> type = entity -> type;
                 
-                //esvazia a posição antiga
+                // esvazia a posição antiga
                 entity -> type = empty;
                 entity -> age = 0;
                 entity -> energy = 0;
 
-                //atualiza a variável do thread entity, atribuindo/recendo o endereço da posição em que moveu.
+                // atualiza a variável do thread entity, atribuindo/recendo o endereço da posição em que moveu.
                 entity = new_pos_entity;
                 
                 pos_cur.i = new_pos.i;
@@ -365,7 +361,7 @@ void iteracao(pos_t pos, entity_type_t type){
                 entity->energy -= entity-> cost_move();
             }
 
-            //confere a energia
+            // confere a energia
             if (entity->energy <= 0){
                 entity->die();
                 isDying = true;
@@ -374,7 +370,7 @@ void iteracao(pos_t pos, entity_type_t type){
         }
 
         n_ready_threads++;
-        thread_ready.notify_one(); // avisa ao main que terminou a iteração
+        thread_ready.notify_one(); // avisa ao main que terminou a ação / iteração
 
         if(isDying) {
             isAlive = false;
@@ -479,11 +475,11 @@ int main()
         // quantiadade de threads (c+h+p) ativos no momento do new_iteration.notify_all();
         int num_threads_aux  = num_threads_c + num_threads_h + num_threads_p; 
         
-        //avisa a todos que o get foi solicitado
+        // avisa a todos que o get foi solicitado
         new_iteration.notify_all();
         n_ready_threads = 0;
 
-        //aguarda até que todas as entidades tenham checado suas idades
+        // aguarda até que todas as entidades tenham checado suas idades
         while(n_ready_threads < num_threads_aux && running) {
             thread_ready.wait(tf_lk);   
         }
@@ -504,25 +500,25 @@ int main()
             thread_ready.wait(tf_lk);   
         }
 
-        //avisa a todos os herbívoros que chegou a sua vez
+        // avisa a todos os herbívoros que chegou a sua vez
         iteration_h.notify_all();
         n_ready_threads = 0;
 
-        //aguarda que todos os herbívoros realizem suas ações da iteração
+        // aguarda que todos os herbívoros realizem suas ações da iteração
         while(n_ready_threads < num_h_threads_aux && running) {
             thread_ready.wait(tf_lk);
         }
 
-        //avisa a todas as plantas que chegou a sua vez
+        // avisa a todas as plantas que chegou a sua vez
         iteration_p.notify_all();
         n_ready_threads = 0;
 
-        //aguarda que todas as plantas realizem suas ações da iteração
+        // aguarda que todas as plantas realizem suas ações da iteração
         while(n_ready_threads < num_p_threads_aux && running) {
             thread_ready.wait(tf_lk);
         }
 
-        //get_finished.notify_all();
+        // get_finished.notify_all();
         
         // Return the JSON representation of the entity grid
         nlohmann::json json_grid = entity_grid; 
