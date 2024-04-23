@@ -12,13 +12,14 @@
 int n_threads = 0;
 int n_ready_threads = 0;
 std::mutex m;
-//Número de plantas
+//Número de plantas em execução
 int num_threads_p = 0;
-//Número de herbívoros
+//Número de herbívoros em execução
 int num_threads_h = 0;
-//Número de carnívoros
+//Número de carnívoros em execução
 int num_threads_c = 0;
-//std::mutex take_action;
+
+//usado para autorizar todas as entidades a checar se irão morrer de idade
 std::condition_variable new_iteration;
 std::condition_variable thread_ready;
 std::condition_variable get_finished;
@@ -272,7 +273,7 @@ void iteracao(pos_t pos, entity_type_t type){
         }
 
         n_ready_threads++;
-        thread_ready.notify_one();
+        thread_ready.notify_one(); // notifica ao main que já terminou de conferir a morte por idade.
 
         if(isDying) {
             isAlive = false;
@@ -284,59 +285,48 @@ void iteracao(pos_t pos, entity_type_t type){
 
         switch(type){
         case plant:
-        iteration_p.wait(ni_lk);
+        iteration_p.wait(ni_lk);//caso planta, espera a chamada de plantas (após a de herbívoros)
         break;
         case herbivore:
-        iteration_h.wait(ni_lk);
+        iteration_h.wait(ni_lk); //caso herbívoro, espera a chamada de herbívoro (após a de carnívoros)
         break;
         case carnivore:
-        iteration_c.wait(ni_lk);
+        iteration_c.wait(ni_lk); //caso carnívoro, espera a chamada de carnívoro (a primeira após a checagem de idade das entidades)
         break;
         }
 
         //atualiza os valores de entidade
         entity = &entity_grid[pos_cur.i][pos_cur.j];
 
-        if(entity->killed == true){ ///caso ele tenha sido morto por alguma thread anterior
+        if(entity->killed == true){ ///caso ele tenha sido morto por alguma entidade/thread anterior
             entity->die();
             isDying = true;
         }
 
         //se vivo
         if(!isDying) {
-            /*checar a vizinhança. Vale a pena criar uma função que retorna um vetor de posições possíveis, 
-            já que pode ser usado nas funções/linhas seguintes.
-            por ex: 
-                uma função que retorna o vetor de posições possíveis
-                outra função de comer, que tem como argumento/parametro receber o vetor de posições possíveis.
-                    checa se existe animal ou planta adjacente, tira sorte e decrementa energia
-                outra função para mover, usa mesmo vetor ( ponteiros de entidades seria o ideal): 
-                    checa se está vazia, escolhe uma e move (copia os valores da entidade para a posição desejada, 
-                    limpa a atual, e atualiza a posiçao pos da thread. é uma boa fazer uma função específica para mover a uma posição determinada.). 
-                    decrementa energia.
-            */
         
             //recebe as posições adjacentes em que há alguma presa. No caso de carnívoro: herbívoro; caso herbívoro, planta.
             std::vector<pos_t> pos_aval = entity->close_pos(pos_cur, empty);
             //recebe as posições adjacentes vazias
             std::vector<pos_t> preys = entity->close_pos(pos_cur, entity->prey_type());
             
-            while(preys.size()>0){
+            //comer
+            while(preys.size()>0){ //confere cada um das prezas que estiverem adjacentes
                 pos_t it_pos = preys.back(); // pega o ultimo da fila.
-                entity_t* ent_adj = &entity_grid[it_pos.i][it_pos.j];
+                entity_t* ent_adj = &entity_grid[it_pos.i][it_pos.j]; // ponteiro auxiliar, da entidade (presa) da posição correspondente
                 
-                //TODO
-                //continuar o código...
                 if(random_action(entity->prob_eat())) {
                     //matar
                     ent_adj->killed = true;
-                    //ganho de energia ao matar
+                    //ganha energia ao matar
                     entity->energy += entity->gain_eat();
                     if(entity->energy >= MAXIMUM_ENERGY) entity->energy = MAXIMUM_ENERGY;
                 }
                 preys.pop_back();//matando ou não, retira da fila
             }
 
+            //reproduzir
             if(pos_aval.size() > 0 && random_action(entity->prob_rep())){
                 int item = random_integer(pos_aval.size())-1;
                 pos_t it_pos = pos_aval.at(item); //posição aleatoria
@@ -351,11 +341,12 @@ void iteracao(pos_t pos, entity_type_t type){
                 entity->energy -= entity->cost_rep();
             }
             
+            //mover
             if(pos_aval.size() > 0 && random_action(entity->prob_mov())){
                 pos_t new_pos(500,500);
                 entity_t* new_pos_entity;
                 // variável auxiliar new_pos. Escolhe aleatoriamente uma das posições vazias presentes no vetor
-                new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //posição aleatoria
+                new_pos = pos_aval.at(random_integer(pos_aval.size())-1); //carrega a posição aleatoria
 
                 // variável auxiliar new_pos_entity. É o endereço da posição vizinha escolhida. Excluída ao final do if.
                 new_pos_entity = &entity_grid[new_pos.i][new_pos.j];
@@ -379,24 +370,16 @@ void iteracao(pos_t pos, entity_type_t type){
                 entity->energy -= entity-> cost_move();
             }
 
-            //confere a energia
+            //checar energia
             if (entity->energy <= 0){
                 entity->die();
                 isDying = true;
             }
 
-           // if(entity->natural_death()) isDying = true;
-            /*
-        if(!entity->eat(clos_pos)){
-            if(!entity->reproduct(clos_pos)){
-                entity->move(clos_pos);
-            }
-        }
-        */  
         }
 
         n_ready_threads++;
-        thread_ready.notify_one();
+        thread_ready.notify_one(); // avisa ao main que terminou a iteração
 
         if(isDying) {
             isAlive = false;
