@@ -479,36 +479,45 @@ int main()
         // quantiadade de threads (c+h+p) ativos no momento do new_iteration.notify_all();
         int num_threads_aux  = num_threads_c + num_threads_h + num_threads_p; 
         
-        
+        //avisa a todos que o get foi solicitado
         new_iteration.notify_all();
         n_ready_threads = 0;
+
+        //aguarda até que todas as entidades tenham checado suas idades
         while(n_ready_threads < num_threads_aux && running) {
             thread_ready.wait(tf_lk);   
         }
 
-        // quantiadade de threads_c ativos no momento do iteration_c.notify_all();
+        // quantiadade de threads_c ativos ao término da checagem de idades
         int num_c_threads_aux  = num_threads_c; 
-        // quantiadade de threads_h ativos no momento do iteration_h.notify_all();
+        // quantiadade de threads_h ativos ao término da checagem de idades
         int num_h_threads_aux  = num_threads_h;
-        // quantiadade de threads_p ativos no momento do iteration_p.notify_all();
+        // quantiadade de threads_p ativos ao término da checagem de idades
         int num_p_threads_aux  = num_threads_p;
 
+        //avisa a todos os carnívoros que chegou a sua vez
         iteration_c.notify_all();
         n_ready_threads = 0;
+
+        //aguarda que todos os carnívoros realizem suas ações da iteração
         while(n_ready_threads < num_c_threads_aux && running) {
             thread_ready.wait(tf_lk);   
         }
 
-
+        //avisa a todos os herbívoros que chegou a sua vez
         iteration_h.notify_all();
         n_ready_threads = 0;
+
+        //aguarda que todos os herbívoros realizem suas ações da iteração
         while(n_ready_threads < num_h_threads_aux && running) {
             thread_ready.wait(tf_lk);
         }
 
-
+        //avisa a todas as plantas que chegou a sua vez
         iteration_p.notify_all();
         n_ready_threads = 0;
+
+        //aguarda que todas as plantas realizem suas ações da iteração
         while(n_ready_threads < num_p_threads_aux && running) {
             thread_ready.wait(tf_lk);
         }
