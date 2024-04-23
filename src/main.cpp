@@ -68,7 +68,24 @@ struct pos_t
     uint32_t j;
     pos_t(uint32_t i_, uint32_t j_): i(i_), j(j_) {};
 };
-std::vector<pos_t> dead;
+
+// Auxiliary code to convert the entity_type_t enum to a string
+NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
+                                                {empty, " "},
+                                                {plant, "P"},
+                                                {herbivore, "H"},
+                                                {carnivore, "C"},
+                                            })
+
+// Auxiliary code to convert the entity_t struct to a JSON object
+namespace nlohmann
+{
+    void to_json(nlohmann::json &j, const entity_t &e)
+    {
+        j = nlohmann::json{{"type", e.type}, {"energy", e.energy}, {"age", e.age}};
+    }
+}
+
 
 
 struct entity_t{
@@ -88,41 +105,46 @@ struct entity_t{
 
     // retorna o tipo de presa do seu tipo
     entity_type_t prey_type(); 
+    
+    // incrementa a variável que indica a quantidade de threads/entidades do seu tipo (ao nascer)
+    void inc_num_thread_t();
+    // decrementa a variável que indica a quantidade de threads/entidades do seu tipo (ao morrer)
+    void dec_num_thread_t();
 
     //Probabilidade:
 
-    //  probabilidade de reproduzir
+    // probabilidade de reproduzir
     double prob_rep();
-    //  probabilidade de comer
+    // probabilidade de comer
     double prob_eat();
-    //  probabilidade de reproduzir
+    // probabilidade de mover
     double prob_mov();
 
     //Energia:
 
     // mínimo de energia para reproduzir
     int32_t min_rep() { return (this->type == plant) ? 0 : THRESHOLD_ENERGY_FOR_REPRODUCTION;}; // retorna 0 se planta, THRESHOLD_ENERGY_FOR_REPRODUCTION caso contrário
+
     // custo de energia para reproduzir
     int32_t cost_rep() {return (this->type == plant) ? 0 : 10;}; // retorna 0 se planta, 10 caso contrário
+
     // ganho de energia ao comer
     int32_t gain_eat() {return (this->type == herbivore) ? 30 : 20;}; // retorna 30 se herbivoro, 20 caso carnivoro. Plantas não comem.
+
     // custo de energia para mover-se
     int32_t cost_move(){ return 5;}; // poderia colocar como const... mas deixei assim para seguir o padrão
 
     // faz uma analise das posições adjacentes. Retorna um vetor com as posições 
     std::vector<pos_t> close_pos(pos_t pos, entity_type_t find_type); 
-
-    // incrementa a variável que indica a quantidade de threads/entidades do seu tipo
-    void inc_num_thread_t();
-    // decrementa a variável que indica a quantidade de threads/entidades do seu tipo
-    void dec_num_thread_t();
-
-    
+  
 };
+
 static std::vector<std::vector<entity_t>> entity_grid;
 
 
+//IMPLEMENTAÇÃO DO ENTITY_T INI
 
+// retorna a idade máxima do seu tipo
 int32_t entity_t::max_age(){
     switch (this->type){
         case plant: return PLANT_MAXIMUM_AGE;
@@ -131,28 +153,7 @@ int32_t entity_t::max_age(){
     }
     return 0;
 }
-double entity_t::prob_rep(){
-    switch (this->type){
-        case plant: return PLANT_REPRODUCTION_PROBABILITY;
-        case herbivore: return HERBIVORE_REPRODUCTION_PROBABILITY;
-        case carnivore: return CARNIVORE_REPRODUCTION_PROBABILITY;
-    }
-    return 0;
-}
-double entity_t::prob_eat(){
-    switch (this->type){
-        case herbivore: return HERBIVORE_EAT_PROBABILITY;
-        case carnivore: return CARNIVORE_EAT_PROBABILITY;
-    }
-    return 0;
-}
-double entity_t::prob_mov(){
-    switch (this->type){
-        case herbivore: return HERBIVORE_MOVE_PROBABILITY;
-        case carnivore: return CARNIVORE_MOVE_PROBABILITY;
-    }
-    return 0;
-}
+// retorna o tipo de presa do seu tipo
 entity_type_t entity_t::prey_type(){
     switch (this->type){
         case herbivore: return plant;
@@ -161,6 +162,56 @@ entity_type_t entity_t::prey_type(){
     return empty;
 }
 
+// incrementa o número de threads correspondente ao seu tipo (ao nascer)
+void entity_t::inc_num_thread_t(){
+    switch(this->type){
+        case plant: num_threads_p++; break;
+        case herbivore: num_threads_h++; break;
+        case carnivore: num_threads_c++; break;
+    }
+}
+// decrementa o número de threads correspondente ao seu tipo (ao morrer)
+void entity_t::dec_num_thread_t(){
+    switch(this->type){
+        case plant: num_threads_p--; break;
+        case herbivore: num_threads_h--; break;
+        case carnivore: num_threads_c--; break;
+    }
+}
+// ao morrer, esvazia os campos da sua posição no array entity_grid, e decrementa a quantidade do seu tipo
+void entity_t::die(){
+    this -> dec_num_thread_t();
+    this -> type = empty;
+    this -> age = 0;
+    this -> energy = 0;
+    this -> killed = false;
+}
+
+// probabilidade de reproduzir
+double entity_t::prob_rep(){
+    switch (this->type){
+        case plant: return PLANT_REPRODUCTION_PROBABILITY;
+        case herbivore: return HERBIVORE_REPRODUCTION_PROBABILITY;
+        case carnivore: return CARNIVORE_REPRODUCTION_PROBABILITY;
+    }
+    return 0;
+}
+// probabilidade de comer
+double entity_t::prob_eat(){
+    switch (this->type){
+        case herbivore: return HERBIVORE_EAT_PROBABILITY;
+        case carnivore: return CARNIVORE_EAT_PROBABILITY;
+    }
+    return 0;
+}
+// probabilidade de mover
+double entity_t::prob_mov(){
+    switch (this->type){
+        case herbivore: return HERBIVORE_MOVE_PROBABILITY;
+        case carnivore: return CARNIVORE_MOVE_PROBABILITY;
+    }
+    return 0;
+}
 
 std::vector<pos_t> entity_t::close_pos(pos_t pos, entity_type_t find_type){
     std::vector<pos_t> close_pos;
@@ -181,64 +232,23 @@ std::vector<pos_t> entity_t::close_pos(pos_t pos, entity_type_t find_type){
     }
     return close_pos;
 }
+//IMPLEMENTAÇÃO ENTITY_T FIM
 
-
-//CÓDIGOS PADRÃO/ORIGINAL ini
-// Auxiliary code to convert the entity_type_t enum to a string
-NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
-                                                {empty, " "},
-                                                {plant, "P"},
-                                                {herbivore, "H"},
-                                                {carnivore, "C"},
-                                            })
-
-// Auxiliary code to convert the entity_t struct to a JSON object
-namespace nlohmann
-{
-    void to_json(nlohmann::json &j, const entity_t &e)
-    {
-        j = nlohmann::json{{"type", e.type}, {"energy", e.energy}, {"age", e.age}};
-    }
-}
-//CÓDIGOS PADRÃO/ORIGINAL fim
+//AUXILIARES:
 
 // retorna um inteiro de 0 a int max_
 uint32_t random_integer(int max_) {
     return rand() % max_ + 1;;
 }
-
-// incrementa o número de threads correspondente ao seu tipo
-void entity_t::inc_num_thread_t(){
-    switch(this->type){
-        case plant: num_threads_p++; break;
-        case herbivore: num_threads_h++; break;
-        case carnivore: num_threads_c++; break;
-    }
-}
-// decrementa o número de threads correspondente ao seu tipo
-void entity_t::dec_num_thread_t(){
-    switch(this->type){
-        case plant: num_threads_p--; break;
-        case herbivore: num_threads_h--; break;
-        case carnivore: num_threads_c--; break;
-    }
-}
-// ao morrer, esvazia os campos da sua posição no array entity_grid, e decrementa a quantidade do seu tipo
-void entity_t::die(){
-    this -> dec_num_thread_t();
-    this -> type = empty;
-    this -> age = 0;
-    this -> energy = 0;
-    this -> killed = false;
-}
-
-
+//realiza o "sorteio" de acordo com a probabilidade
 bool random_action(double probability) {
     static std::random_device rd;
     static std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0.0, 1.0);
     return dis(gen) < probability;
 }
+//AUXILIARES FIM
+
 
 void iteracao(pos_t pos, entity_type_t type){
     pos_t pos_cur=pos;
