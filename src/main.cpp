@@ -69,22 +69,6 @@ struct pos_t
     pos_t(uint32_t i_, uint32_t j_): i(i_), j(j_) {};
 };
 
-// Auxiliary code to convert the entity_type_t enum to a string
-NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
-                                                {empty, " "},
-                                                {plant, "P"},
-                                                {herbivore, "H"},
-                                                {carnivore, "C"},
-                                            })
-
-// Auxiliary code to convert the entity_t struct to a JSON object
-namespace nlohmann
-{
-    void to_json(nlohmann::json &j, const entity_t &e)
-    {
-        j = nlohmann::json{{"type", e.type}, {"energy", e.energy}, {"age", e.age}};
-    }
-}
 
 
 
@@ -140,6 +124,26 @@ struct entity_t{
 };
 
 static std::vector<std::vector<entity_t>> entity_grid;
+
+//FUNÇÕES EXPORTAÇÃO
+// Auxiliary code to convert the entity_type_t enum to a string
+NLOHMANN_JSON_SERIALIZE_ENUM(entity_type_t, {
+                                                {empty, " "},
+                                                {plant, "P"},
+                                                {herbivore, "H"},
+                                                {carnivore, "C"},
+                                            })
+
+// Auxiliary code to convert the entity_t struct to a JSON object
+namespace nlohmann
+{
+    void to_json(nlohmann::json &j, const entity_t &e)
+    {
+        j = nlohmann::json{{"type", e.type}, {"energy", e.energy}, {"age", e.age}};
+    }
+}
+//FUNÇÕES EXPORTAÇÃO FIM
+
 
 
 //IMPLEMENTAÇÃO DO ENTITY_T INI
